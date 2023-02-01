@@ -5,8 +5,6 @@
 #include <vcpkg/sourceparagraph.h>
 #include <vcpkg/versions.h>
 
-#include <regex>
-
 #include "vcpkg/base/system.print.h"
 #include "vcpkg/base/util.h"
 
@@ -24,24 +22,56 @@ namespace vcpkg::Lint
         return original_scheme;
     }
 
-    Status check_usage_forgot_to_install(Filesystem& fs, const SourceControlFileAndLocation& scf, Fix fix) {
-        auto portfile_path =  scf.source_location / "portfile.cmake";
+    namespace
+    {
+        static inline size_t find_ignore_case(const std::string& content, const std::string& find, std::size_t offset = 0)
+        {
+            auto it = std::search(
+                content.begin() + offset,
+                content.end(),
+                find.begin(),
+                find.end(),
+                [](unsigned char ch1, unsigned char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
+            if (it != content.end()) return it - content.begin();
+            return std::string::npos;
+        }
+
+        static bool check_has_install_usage(const std::string& file)
+        {
+            size_t pos = 0;
+            while ((pos = find_ignore_case(file, "file(", pos)) != std::string::npos)
+            {
+                pos += 5;
+                auto cmd_end = find_ignore_case(file, ")", pos);
+                if (cmd_end == std::string::npos) return false;
+                auto usage = find_ignore_case(file, "usage", pos);
+                if (usage == std::string::npos) return false;
+                if (usage < cmd_end) return true;
+            }
+            return false;
+        }
+    }
+
+    Status check_usage_forgot_to_install(Filesystem& fs, const SourceControlFileAndLocation& scf, Fix fix)
+    {
+        auto portfile_path = scf.source_location / "portfile.cmake";
         auto usage_path = scf.source_location / "usage";
-        if (!fs.exists(usage_path, VCPKG_LINE_INFO)) {
+        if (!fs.exists(usage_path, VCPKG_LINE_INFO))
+        {
             return Status::Ok;
         }
         // Try find the `file( ..... usage"` pattern
-        static const std::regex MATCH_USAGE_REGEX{R"###(file\([^)]*usage)###", std::regex_constants::nosubs | std::regex_constants::icase};
-
         auto portfile = fs.read_contents(portfile_path, VCPKG_LINE_INFO);
-        std::smatch match_install_usage;
-        const bool has_install_usage = std::regex_search(portfile, match_install_usage, MATCH_USAGE_REGEX);
+        const bool has_install_usage = check_has_install_usage(portfile);
 
         // TODO: Should we skip empty package (like boost, ...)?
-        if (!has_install_usage) {
-            if (fix == Fix::YES) {
+        if (!has_install_usage)
+        {
+            if (fix == Fix::YES)
+            {
                 portfile += "\n";
-                portfile += R"###(file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"))###";
+                portfile +=
+                    R"###(file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"))###";
                 portfile += "\n";
                 fs.write_contents(portfile_path, portfile, VCPKG_LINE_INFO);
                 return Status::Fixed;
