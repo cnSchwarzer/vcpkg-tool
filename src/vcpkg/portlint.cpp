@@ -24,27 +24,23 @@ namespace vcpkg::Lint
 
     namespace
     {
-        static inline size_t find_ignore_case(const std::string& content, const std::string& find, std::size_t offset = 0)
+        inline size_t find_ignore_case(const StringView& content, const StringView& find, std::size_t offset = 0)
         {
-            auto it = std::search(
-                content.begin() + offset,
-                content.end(),
-                find.begin(),
-                find.end(),
-                [](unsigned char ch1, unsigned char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
+            auto it = Strings::case_insensitive_ascii_search(StringView(content).substr(offset), find);
             if (it != content.end()) return it - content.begin();
             return std::string::npos;
         }
 
-        static bool check_has_install_usage(const std::string& file)
+        bool check_has_install_usage(const std::string& file)
         {
+            static const StringLiteral FIND_FILE = StringLiteral("file(");
             size_t pos = 0;
-            while ((pos = find_ignore_case(file, "file(", pos)) != std::string::npos)
+            while ((pos = find_ignore_case(file, FIND_FILE, pos)) != std::string::npos)
             {
-                pos += 5;
-                auto cmd_end = find_ignore_case(file, ")", pos);
+                pos += FIND_FILE.size();
+                auto cmd_end = file.find(')', pos);
                 if (cmd_end == std::string::npos) return false;
-                auto usage = find_ignore_case(file, "usage", pos);
+                auto usage = file.find("usage", pos);
                 if (usage == std::string::npos) return false;
                 if (usage < cmd_end) return true;
             }
