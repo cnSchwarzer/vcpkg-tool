@@ -60,7 +60,6 @@ namespace vcpkg::Lint
         auto portfile = fs.read_contents(portfile_path, VCPKG_LINE_INFO);
         const bool has_install_usage = check_has_install_usage(portfile);
 
-        // TODO: Should we skip empty package (like boost, ...)?
         if (!has_install_usage)
         {
             if (fix == Fix::YES)
