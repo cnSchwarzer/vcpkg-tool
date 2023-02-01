@@ -26,12 +26,7 @@ namespace vcpkg::Lint
     {
         static inline size_t find_ignore_case(const std::string& content, const std::string& find, std::size_t offset = 0)
         {
-            auto it = std::search(
-                content.begin() + offset,
-                content.end(),
-                find.begin(),
-                find.end(),
-                [](unsigned char ch1, unsigned char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
+            auto it = Strings::case_insensitive_ascii_search(StringView(content).substr(offset), find);
             if (it != content.end()) return it - content.begin();
             return std::string::npos;
         }
