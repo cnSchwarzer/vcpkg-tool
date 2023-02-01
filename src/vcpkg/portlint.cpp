@@ -30,9 +30,8 @@ namespace vcpkg::Lint
         if (!fs.exists(usage_path, VCPKG_LINE_INFO)) {
             return Status::Ok;
         }
-        // Try find the `file( ..... /usage"` pattern
-        static const std::regex MATCH_USAGE_REGEX{R"###((file|FILE)\([\w\W]*/usage)###"};
-        static const std::string STANDARD_INSTALL_USAGE = R"###(file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"))###";
+        // Try find the `file( ..... usage"` pattern
+        static const std::regex MATCH_USAGE_REGEX{R"###(file\([^)]*usage)###", std::regex_constants::nosubs | std::regex_constants::icase};
 
         auto portfile = fs.read_contents(portfile_path, VCPKG_LINE_INFO);
         std::smatch match_install_usage;
@@ -42,7 +41,7 @@ namespace vcpkg::Lint
         if (!has_install_usage) {
             if (fix == Fix::YES) {
                 portfile += "\n";
-                portfile += STANDARD_INSTALL_USAGE;
+                portfile += R"###(file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"))###";
                 portfile += "\n";
                 fs.write_contents(portfile_path, portfile, VCPKG_LINE_INFO);
                 return Status::Fixed;
@@ -50,12 +49,6 @@ namespace vcpkg::Lint
             msg::println_warning(msgLintUsageForgotToInstall,
                                  msg::package_name = scf.source_control_file->core_paragraph->name);
             return Status::Problem;
-        }
-
-        if (portfile.find(STANDARD_INSTALL_USAGE) == std::string::npos) {
-            msg::println_warning(msgLintUsageNotStandard,
-                                 msg::package_name = scf.source_control_file->core_paragraph->name,
-                                 msg::value = STANDARD_INSTALL_USAGE);
         }
 
         return Status::Ok;
